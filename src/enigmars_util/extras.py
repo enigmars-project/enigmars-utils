@@ -20,7 +20,7 @@ _TIMEOUT = 20
 EXTRAS_SETUP = """\
 [enigmars-extras]
 SigLevel = Optional TrustAll
-Server = https://github.com/RishiSpace/enigmars-extras/releases/latest/download
+Server = https://github.com/enigmars-project/enigmars-extras/releases/latest/download
 """
 
 

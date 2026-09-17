@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: enigmars-utils
-Source: https://github.com/RishiSpace/enigmars-utils
+Source: https://github.com/enigmars-project/enigmars-utils
 
 Files: *
 Copyright: 2026 RishiSpace

@@ -26,7 +26,7 @@ kernels), `firmware-reboot` (`systemctl reboot --firmware-setup`),
 sync db, otherwise clone the upstream GitHub tree and compile as the
 pkexec caller, then install `/usr/bin/{yay,paru}`),
 `self-update` (compare `/usr/share/enigmars-util/revision` to
-`origin/main` on `RishiSpace/enigmars-utils`, clone, `makepkg` on
+`origin/main` on `enigmars-project/enigmars-utils`, clone, `makepkg` on
 pacman or `scripts/install.sh` otherwise).
 
 `--page enigmars-packages` lists uninstalled packages from the

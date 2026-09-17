@@ -4,7 +4,7 @@ Section: utils
 Priority: optional
 Architecture: all
 Maintainer: RishiSpace <rishikesh.giridhar@outlook.com>
-Homepage: https://github.com/RishiSpace/enigmars-utils
+Homepage: https://github.com/enigmars-project/enigmars-utils
 Depends: python3 (>= 3.12), python3-pyside6 | python3-pyside6.qtwidgets, policykit-1 | polkitd
 Recommends: sbctl, ufw
 Description: Qt landing hub for Linux (tweaks, packages, kernels, Secure Boot)

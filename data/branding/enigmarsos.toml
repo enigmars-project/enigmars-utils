@@ -3,6 +3,6 @@ name = "EnigmarsOS"
 [links]
 Documentation = "https://enigmarsos.rishispace.dev/docs"
 Website = "https://enigmarsos.rishispace.dev"
-GitHub = "https://github.com/RishiSpace/EnigmarsOS"
-Issues = "https://github.com/RishiSpace/EnigmarsOS/issues"
+GitHub = "https://github.com/enigmars-project/EnigmarsOS"
+Issues = "https://github.com/enigmars-project/EnigmarsOS/issues"
 Changelog = "https://enigmarsos.rishispace.dev/changelog"

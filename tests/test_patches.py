@@ -5,22 +5,25 @@ from unittest import mock
 
 from enigmars_util.patches import (
     KernelRepoPatchStatus,
+    OrgMigrationStatus,
     lts_pinned_tag,
     lts_unpinned_in,
+    migrate_org_in_text,
     offline_include_present,
+    org_migration_needed_in,
     probe_kernel_repo_patch,
 )
 
 PLACEHOLDER_CONF = (
     "[linux-enigmarsos-lts]\n"
     "SigLevel = Optional TrustAll\n"
-    "Server = https://github.com/RishiSpace/linux-enigmarsos/releases/download/lts\n"
+    "Server = https://github.com/enigmars-project/linux-enigmarsos/releases/download/lts\n"
 )
 
 PINNED_CONF = (
     "[linux-enigmarsos-lts]\n"
     "SigLevel = Optional TrustAll\n"
-    "Server = https://github.com/RishiSpace/linux-enigmarsos/releases/download/linux-enigmarsos-lts-6.18.51\n"
+    "Server = https://github.com/enigmars-project/linux-enigmarsos/releases/download/linux-enigmarsos-lts-6.18.51\n"
 )
 
 
@@ -111,6 +114,36 @@ class ProbeTest(unittest.TestCase):
         ):
             status = probe_kernel_repo_patch()
         self.assertFalse(status.needs_patch)
+
+
+class OrgMigrationTest(unittest.TestCase):
+    def test_old_org_flags(self) -> None:
+        old = (
+            "[linux-enigmarsos]\n"
+            "SigLevel = Optional TrustAll\n"
+            "Server = https://github.com/RishiSpace/linux-enigmarsos/releases/latest/download\n"
+        )
+        self.assertTrue(org_migration_needed_in(old))
+
+    def test_new_org_clean(self) -> None:
+        self.assertFalse(org_migration_needed_in(PLACEHOLDER_CONF))
+        self.assertFalse(org_migration_needed_in(PINNED_CONF))
+
+    def test_commented_old_org_ignored(self) -> None:
+        self.assertFalse(
+            org_migration_needed_in("# Server = https://github.com/RishiSpace/linux-enigmarsos/releases/latest/download\n")
+        )
+
+    def test_migrate_rewrites_and_idempotent(self) -> None:
+        old = "Server = https://github.com/RishiSpace/linux-enigmarsos/releases/latest/download\n"
+        new = migrate_org_in_text(old)
+        self.assertIn("github.com/enigmars-project/linux-enigmarsos", new)
+        self.assertNotIn("RishiSpace", new)
+        self.assertEqual(migrate_org_in_text(new), new)
+
+    def test_status_needs_patch(self) -> None:
+        self.assertTrue(OrgMigrationStatus(("a",)).needs_patch)
+        self.assertFalse(OrgMigrationStatus(()).needs_patch)
 
 
 if __name__ == "__main__":

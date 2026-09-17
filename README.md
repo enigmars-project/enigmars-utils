@@ -51,7 +51,7 @@ Then launch **Enigmars Util** from the app menu, or `enigmars-util`.
 ## Enigmars Packages
 
 If pacman has the `[enigmars-extras]` repo (see
-[enigmars-extras](https://github.com/RishiSpace/enigmars-extras)), the
+[enigmars-extras](https://github.com/enigmars-project/enigmars-extras)), the
 **Enigmars Pkgs** tab lists packages from that repo that are not installed
 and can install selected ones or all of them. If the repo is missing, **Add
 repo and refresh** writes `/etc/pacman.d/enigmars-extras.conf`, Includes it

@@ -26,13 +26,13 @@ def _links(enigmarsos: bool) -> dict[str, str]:
         return {
             "Documentation": "https://enigmarsos.rishispace.dev/docs",
             "Website": "https://enigmarsos.rishispace.dev",
-            "GitHub": "https://github.com/RishiSpace/enigmars-utils",
+            "GitHub": "https://github.com/enigmars-project/enigmars-utils",
         }
     with path.open("rb") as fh:
         doc = tomllib.load(fh)
     links = doc.get("links") or {}
     out = {str(k): str(v) for k, v in links.items()}
-    out.setdefault("Utils source", "https://github.com/RishiSpace/enigmars-utils")
+    out.setdefault("Utils source", "https://github.com/enigmars-project/enigmars-utils")
     return out
 
 

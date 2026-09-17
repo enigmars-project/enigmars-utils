@@ -32,7 +32,10 @@ from enigmars_util.kernel_repos import (
 from enigmars_util.patches import (
     LTS_CONF,
     OFFLINE_CONF,
+    ORG_MIGRATION_CONFS,
     lts_unpinned_in,
+    migrate_org_in_text,
+    org_migration_needed_in,
 )
 from enigmars_util.names import (
     validate_aur_helper,
@@ -638,7 +641,7 @@ def _kernel_repo_setup() -> int:
     return _stream([pacman, "-Sy", "--noconfirm"])
 
 
-_LTS_API = "https://api.github.com/repos/RishiSpace/linux-enigmarsos"
+_LTS_API = "https://api.github.com/repos/enigmars-project/linux-enigmarsos"
 _LTS_DB_NAMES = {
     "linux-enigmarsos-lts.db",
     "linux-enigmarsos-lts.db.tar.gz",
@@ -718,10 +721,29 @@ def _repo_repair_kernel() -> int:
     if not PACMAN_CONF.is_file():
         print(f"missing {PACMAN_CONF}", file=sys.stderr)
         return 1
-    # Fix 1: stop the frozen ISO snapshot from shadowing the rolling repo.
+    # Fix 1: migrate pacman drop-ins from RishiSpace to enigmars-project.
+    # Pre-move installs keep working via redirect, but pacman should track
+    # the canonical org URLs.
+    print("fix 1/3: migrating pacman Server URLs to enigmars-project")
+    migrated = 0
+    for conf in ORG_MIGRATION_CONFS:
+        if not conf.is_file():
+            continue
+        try:
+            conf_text = conf.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"cannot read {conf}: {exc}", file=sys.stderr)
+            return 1
+        if org_migration_needed_in(conf_text):
+            print(f"rewriting {conf} to enigmars-project")
+            _atomic_write(conf, migrate_org_in_text(conf_text), 0o644)
+            migrated += 1
+    if not migrated:
+        print("pacman Server URLs already on enigmars-project")
+    # Fix 2: stop the frozen ISO snapshot from shadowing the rolling repo.
     # Post-install owns /usr/share/enigmarsos/offline-repo itself; the patch
     # only removes the shadowing (never deletes the 230 MB payload).
-    print("fix 1/2: removing enigmarsos-offline shadow")
+    print("fix 2/3: removing enigmarsos-offline shadow")
     original = PACMAN_CONF.read_text(encoding="utf-8")
     updated = "".join(
         line for line in original.splitlines(keepends=True) if "enigmarsos-offline.conf" not in line
@@ -739,8 +761,8 @@ def _repo_repair_kernel() -> int:
     except OSError as exc:
         print(f"cannot remove {OFFLINE_CONF}: {exc}", file=sys.stderr)
         return 1
-    # Fix 2: pin the LTS Server URL to a real release tag.
-    print("fix 2/2: pinning linux-enigmarsos-lts Server to a release tag")
+    # Fix 3: pin the LTS Server URL to a real release tag.
+    print("fix 3/3: pinning linux-enigmarsos-lts Server to a release tag")
     if not LTS_CONF.is_file():
         print(f"missing {LTS_CONF} — enable the kernel repos first", file=sys.stderr)
         return 1

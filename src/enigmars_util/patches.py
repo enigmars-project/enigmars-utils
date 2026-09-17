@@ -1,6 +1,6 @@
 """One-click repair patches. Patch #1: kernel repository repair (Sept 2026).
 
-Two failure modes, one logical patch:
+Three failure modes, one logical patch:
 
 - ``enigmarsos-offline`` shadow: the frozen ISO snapshot drop-in stays
   Included on installed systems, so ``pacman`` resolves
@@ -10,6 +10,10 @@ Two failure modes, one logical patch:
   points at the literal ``releases/download/lts`` placeholder, which does
   not resolve. The fix pins it to a real release tag (same selection as
   EnigmarsOS ``scripts/build/fetch-lts-repo.sh``).
+- Org move: pacman drop-ins still point at ``github.com/RishiSpace/*``
+  (or ``api.github.com/repos/RishiSpace/*``). The fix rewrites them to
+  ``github.com/enigmars-project/*`` so pre-move installs keep tracking
+  releases after the transfer.
 
 This module only probes. The fix runs through the privileged helper
 (``repo-repair-kernel`` verb); probe helpers are pure/small so tests can
@@ -28,6 +32,14 @@ LTS_CONF = Path("/etc/pacman.d/linux-enigmarsos-lts.conf")
 OFFLINE_CONF = Path("/etc/pacman.d/enigmarsos-offline.conf")
 OFFLINE_INCLUDE = "Include = /etc/pacman.d/enigmarsos-offline.conf"
 PACMAN_CONF = Path("/etc/pacman.conf")
+
+OLD_GITHUB_ORG = "RishiSpace"
+NEW_GITHUB_ORG = "enigmars-project"
+ORG_MIGRATION_CONFS = (
+    Path("/etc/pacman.d/linux-enigmarsos.conf"),
+    Path("/etc/pacman.d/linux-enigmarsos-lts.conf"),
+    Path("/etc/pacman.d/enigmars-extras.conf"),
+)
 
 LIVE_ISO_MARKERS = (Path("/run/archiso"), Path("/etc/enigmarsos/iso-build"))
 
@@ -94,6 +106,53 @@ def offline_include_present(text: str) -> bool:
         if line == OFFLINE_INCLUDE:
             return True
     return False
+
+
+def org_migration_needed_in(text: str) -> bool:
+    """True when a Server line still points at the old GitHub org."""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, _, rest = line.partition("=")
+        if key.strip().lower() != "server":
+            continue
+        if f"github.com/{OLD_GITHUB_ORG}/" in rest:
+            return True
+        if f"api.github.com/repos/{OLD_GITHUB_ORG}/" in rest:
+            return True
+    return False
+
+
+def migrate_org_in_text(text: str) -> str:
+    """Rewrite old-org pacman Server URLs to the new org (idempotent)."""
+    return text.replace(
+        f"github.com/{OLD_GITHUB_ORG}/", f"github.com/{NEW_GITHUB_ORG}/"
+    ).replace(
+        f"api.github.com/repos/{OLD_GITHUB_ORG}/",
+        f"api.github.com/repos/{NEW_GITHUB_ORG}/",
+    )
+
+
+@dataclass(frozen=True)
+class OrgMigrationStatus:
+    pending: tuple[str, ...]  # conf paths whose Server lines still use the old org
+
+    @property
+    def needs_patch(self) -> bool:
+        return bool(self.pending)
+
+
+def probe_org_migration() -> OrgMigrationStatus:
+    """Best-effort org-migration status (never raises for missing files)."""
+    pending: list[str] = []
+    for conf in ORG_MIGRATION_CONFS:
+        try:
+            if org_migration_needed_in(_read_text(conf)):
+                pending.append(str(conf))
+        except Exception:  # noqa: BLE001
+            continue
+    return OrgMigrationStatus(tuple(pending))
 
 
 def _read_text(path: Path) -> str:

@@ -18,7 +18,7 @@ enigmars-util-helper = "enigmars_util_helper.__main__:main"
 
 [project.urls]
 Homepage = "https://enigmarsos.rishispace.dev"
-Repository = "https://github.com/RishiSpace/enigmars-utils"
+Repository = "https://github.com/enigmars-project/enigmars-utils"
 
 [tool.setuptools.packages.find]
 where = ["src"]

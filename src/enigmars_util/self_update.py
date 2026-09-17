@@ -14,9 +14,9 @@ from pathlib import Path
 
 from enigmars_util.paths import data_root
 
-REPO_HTTPS = "https://github.com/RishiSpace/enigmars-utils.git"
-REPO_SSH = "git@github.com:RishiSpace/enigmars-utils.git"
-REPO_API = "https://api.github.com/repos/RishiSpace/enigmars-utils/commits/main"
+REPO_HTTPS = "https://github.com/enigmars-project/enigmars-utils.git"
+REPO_SSH = "git@github.com:enigmars-project/enigmars-utils.git"
+REPO_API = "https://api.github.com/repos/enigmars-project/enigmars-utils/commits/main"
 BRANCH = "main"
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 _TIMEOUT = 20

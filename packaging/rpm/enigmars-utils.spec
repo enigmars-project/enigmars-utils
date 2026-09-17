@@ -5,7 +5,7 @@ Version:        @@VERSION@@
 Release:        1
 Summary:        Qt landing hub for Linux (tweaks, packages, kernels, Secure Boot)
 License:        GPLv3+
-URL:            https://github.com/RishiSpace/enigmars-utils
+URL:            https://github.com/enigmars-project/enigmars-utils
 BuildArch:      noarch
 Requires:       python3 >= 3.12
 Requires:       polkit

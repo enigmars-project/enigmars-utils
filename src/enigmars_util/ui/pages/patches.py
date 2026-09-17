@@ -12,6 +12,7 @@ from enigmars_util.patches import (
     KernelRepoPatchStatus,
     lts_pinned_tag,
     probe_kernel_repo_patch,
+    probe_org_migration,
 )
 from enigmars_util.privileged import kernel_repo_repair_cmd
 from enigmars_util.profile import HostProfile
@@ -49,7 +50,8 @@ class PatchesPage(QWidget):
 
         self._patch1_card = Card(
             "Kernel repository repair (Sept 2026)",
-            "Repairs the EnigmarsOS kernel repos: removes the frozen ISO snapshot "
+            "Repairs the EnigmarsOS kernel repos: migrates pacman Server URLs "
+            "from RishiSpace to enigmars-project, removes the frozen ISO snapshot "
             "shadow and pins the LTS download URL to a real release.",
         )
         patch_row = QHBoxLayout()
@@ -85,11 +87,17 @@ class PatchesPage(QWidget):
         self.patch_status.setText("Checking kernel repositories…")
         self.patch_btn.setEnabled(False)
 
-        def work() -> KernelRepoPatchStatus | Exception:
+        def work() -> tuple[KernelRepoPatchStatus | Exception, tuple[str, ...]]:
             try:
-                return probe_kernel_repo_patch()
+                status = probe_kernel_repo_patch()
             except Exception as exc:  # noqa: BLE001
-                return exc
+                return exc, ()
+            try:
+                org = probe_org_migration()
+            except Exception:  # noqa: BLE001
+                org = None
+            pending = tuple(org.pending) if org is not None else ()
+            return status, pending
 
         thread = Work(work, self)
         self._patch_work = thread
@@ -103,14 +111,22 @@ class PatchesPage(QWidget):
                 self.patch_btn.setEnabled(mutate)
                 self._show_update_hint = False
                 return
-            if not isinstance(obj, KernelRepoPatchStatus):
+            if not isinstance(obj, tuple) or len(obj) != 2:
                 return
-            if obj.on_live_iso:
+            status, pending = obj
+            if isinstance(status, Exception):
+                self.patch_status.setText(f"Could not check kernel repositories: {status}")
+                self.patch_btn.setEnabled(mutate)
+                self._show_update_hint = False
+                return
+            if not isinstance(status, KernelRepoPatchStatus):
+                return
+            if status.on_live_iso:
                 self.patch_status.setText(
                     "Live ISO detected — the frozen snapshot is legitimate here; no patch needed."
                 )
                 self.patch_btn.setEnabled(False)
-            elif not obj.needs_patch:
+            elif not status.needs_patch and not pending:
                 tag = lts_pinned_tag(_read_lts_conf())
                 text = "Repositories healthy — rolling tracks Latest"
                 text += f", LTS tracks {tag}." if tag else "."
@@ -121,9 +137,13 @@ class PatchesPage(QWidget):
                 self.patch_btn.setEnabled(False)
             else:
                 issues = []
-                if obj.offline_shadows:
+                if pending:
+                    issues.append(
+                        f"pacman Server URLs still point at RishiSpace ({len(pending)} file(s)) — migrate to enigmars-project"
+                    )
+                if status.offline_shadows:
                     issues.append("frozen offline snapshot shadows the rolling kernel (pins kernel forever)")
-                if obj.lts_unpinned:
+                if status.lts_unpinned:
                     issues.append("LTS Server is an unpinned placeholder URL (does not resolve)")
                 self.patch_status.setText("Issues found:\n• " + "\n• ".join(issues))
                 self.patch_btn.setText("Apply kernel repo fixes")
@@ -141,10 +161,12 @@ class PatchesPage(QWidget):
             warn(self, "Kernel repo repair", "Package changes are not available on this system.")
             return
         body = (
-            "Apply both kernel repository fixes in one step?\n\n"
-            "1. Remove the enigmarsos-offline shadow — the frozen ISO snapshot "
+            "Apply kernel repository fixes in one step?\n\n"
+            "1. Migrate pacman Server URLs from RishiSpace to enigmars-project — "
+            "pre-move installs keep tracking releases after the org transfer.\n"
+            "2. Remove the enigmarsos-offline shadow — the frozen ISO snapshot "
             "pins your kernel forever instead of tracking rolling releases.\n"
-            "2. Pin the LTS Server URL to a real release tag — the "
+            "3. Pin the LTS Server URL to a real release tag — the "
             "releases/download/lts placeholder does not resolve.\n\n"
             "Then refresh databases (pacman -Sy) and print which repo each "
             "kernel resolves from. No reboot needed — repo changes need none."

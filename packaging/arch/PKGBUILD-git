@@ -5,7 +5,7 @@ pkgver=1.1.2.r0.g0000000
 pkgrel=1
 pkgdesc="Qt landing hub: tweaks, packages, kernels, and Secure Boot for Linux (git)"
 arch=('any')
-url="https://github.com/RishiSpace/enigmars-utils"
+url="https://github.com/enigmars-project/enigmars-utils"
 license=('GPL-3.0-or-later')
 depends=('python' 'pyside6' 'polkit' 'qt6-base')
 makedepends=('git')
@@ -16,7 +16,7 @@ optdepends=(
 )
 provides=('enigmars-utils' 'enigmars-util')
 conflicts=('enigmars-utils' 'enigmars-util')
-source=("git+https://github.com/RishiSpace/enigmars-utils.git")
+source=("git+https://github.com/enigmars-project/enigmars-utils.git")
 sha256sums=('SKIP')
 
 pkgver() {

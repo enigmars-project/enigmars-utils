@@ -34,12 +34,12 @@ KERNEL_SETUPS: dict[str, str] = {
     "linux-enigmarsos": """\
 [linux-enigmarsos]
 SigLevel = Optional TrustAll
-Server = https://github.com/RishiSpace/linux-enigmarsos/releases/latest/download
+Server = https://github.com/enigmars-project/linux-enigmarsos/releases/latest/download
 """,
     "linux-enigmarsos-lts": """\
 [linux-enigmarsos-lts]
 SigLevel = Optional TrustAll
-Server = https://github.com/RishiSpace/linux-enigmarsos/releases/download/lts
+Server = https://github.com/enigmars-project/linux-enigmarsos/releases/download/lts
 """,
 }
 

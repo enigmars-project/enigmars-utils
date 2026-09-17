@@ -20,7 +20,7 @@ class KernelReposConfTest(unittest.TestCase):
             "Include = /etc/pacman.d/mirrorlist\n"
             "[linux-enigmarsos]\n"
             "SigLevel = Optional TrustAll\n"
-            "Server = https://github.com/RishiSpace/linux-enigmarsos/releases/latest/download\n"
+            "Server = https://github.com/enigmars-project/linux-enigmarsos/releases/latest/download\n"
         )
         self.assertTrue(kernel_repo_present(text, "linux-enigmarsos"))
         self.assertFalse(kernel_repo_present(text, "linux-enigmarsos-lts"))
