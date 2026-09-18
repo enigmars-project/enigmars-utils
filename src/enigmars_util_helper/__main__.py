@@ -11,8 +11,6 @@ import shutil
 import subprocess
 import sys
 import syslog
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 from enigmars_util.aur_helpers import spec_for
@@ -33,9 +31,11 @@ from enigmars_util.patches import (
     LTS_CONF,
     OFFLINE_CONF,
     ORG_MIGRATION_CONFS,
-    lts_unpinned_in,
+    lts_pinned_tag,
+    lts_tracks_in,
     migrate_org_in_text,
     org_migration_needed_in,
+    retrack_lts_in_text,
 )
 from enigmars_util.names import (
     validate_aur_helper,
@@ -641,79 +641,6 @@ def _kernel_repo_setup() -> int:
     return _stream([pacman, "-Sy", "--noconfirm"])
 
 
-_LTS_API = "https://api.github.com/repos/enigmars-project/linux-enigmarsos"
-_LTS_DB_NAMES = {
-    "linux-enigmarsos-lts.db",
-    "linux-enigmarsos-lts.db.tar.gz",
-    "linux-enigmarsos-lts.files",
-    "linux-enigmarsos-lts.files.tar.gz",
-}
-
-
-def _github_json(url: str):
-    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "enigmars-util-helper",
-            **({"Authorization": f"Bearer {token}"} if token else {}),
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.load(resp)
-    except urllib.error.HTTPError as exc:
-        raise ValueError(f"GitHub API {url} -> HTTP {exc.code}") from exc
-    except (urllib.error.URLError, OSError, ValueError) as exc:
-        raise ValueError(f"GitHub API {url} unreachable: {exc}") from exc
-
-
-def _lts_release_assets(rel: dict) -> list[str]:
-    names: list[str] = []
-    for asset in rel.get("assets") or []:
-        name = asset.get("name") or ""
-        if name.startswith("linux-enigmarsos-lts") and (
-            name.endswith(".pkg.tar.zst") or name in _LTS_DB_NAMES
-        ):
-            names.append(name)
-    return names
-
-
-def _discover_lts_tag() -> str:
-    """Release tag holding linux-enigmarsos-lts packages.
-
-    Same selection as EnigmarsOS scripts/build/fetch-lts-repo.sh: the moving
-    `lts` tag first, else the newest non-draft/non-prerelease release whose
-    assets include linux-enigmarsos-lts-*.pkg.tar.zst.
-    """
-    try:
-        rel = _github_json(f"{_LTS_API}/releases/tags/lts")
-    except ValueError as exc:
-        if "HTTP 404" not in str(exc):
-            raise
-        rel = None
-    if rel and any(n.endswith(".pkg.tar.zst") for n in _lts_release_assets(rel)):
-        tag = rel.get("tag_name") or ""
-        print(f"found LTS release: {tag} (tag `lts`)")
-        return tag
-    releases = _github_json(f"{_LTS_API}/releases?per_page=30")
-    if not isinstance(releases, list):
-        raise ValueError("GitHub API did not return a release list")
-    for candidate in releases:
-        if candidate.get("draft") or candidate.get("prerelease"):
-            continue
-        if any(n.endswith(".pkg.tar.zst") for n in _lts_release_assets(candidate)):
-            tag = candidate.get("tag_name") or ""
-            print(f"found LTS release: {tag}")
-            return tag
-    raise ValueError(
-        "no GitHub Release with linux-enigmarsos-lts *.pkg.tar.zst "
-        "(tag `lts` or linux-enigmarsos-lts-*); check the network connection "
-        "and try again — not guessing a tag"
-    )
-
-
 def _repo_repair_kernel() -> int:
     if _pm() != "pacman":
         print("kernel repo repair requires pacman (Arch / EnigmarsOS).", file=sys.stderr)
@@ -761,23 +688,23 @@ def _repo_repair_kernel() -> int:
     except OSError as exc:
         print(f"cannot remove {OFFLINE_CONF}: {exc}", file=sys.stderr)
         return 1
-    # Fix 3: pin the LTS Server URL to a real release tag.
-    print("fix 3/3: pinning linux-enigmarsos-lts Server to a release tag")
+    # Fix 3: track the stable `lts` tag for linux-enigmarsos-lts. Pinned
+    # release URLs freeze LTS updates at that release; the release workflow
+    # retargets `lts` on every LTS release so one stable URL keeps flowing.
+    print("fix 3/3: tracking the stable lts tag for linux-enigmarsos-lts")
     if not LTS_CONF.is_file():
         print(f"missing {LTS_CONF} — enable the kernel repos first", file=sys.stderr)
         return 1
     conf_text = LTS_CONF.read_text(encoding="utf-8")
-    if lts_unpinned_in(conf_text):
-        try:
-            tag = _discover_lts_tag()
-        except ValueError as exc:
-            print(f"LTS tag discovery failed: {exc}", file=sys.stderr)
-            return 1
-        pinned = conf_text.replace("releases/download/lts", f"releases/download/{tag}")
-        print(f"pinning LTS Server to releases/download/{tag}")
-        _atomic_write(LTS_CONF, pinned, 0o644)
+    if not lts_tracks_in(conf_text):
+        old_tag = lts_pinned_tag(conf_text)
+        print(
+            "rewriting LTS Server to releases/download/lts"
+            + (f" (was pinned to {old_tag})" if old_tag else "")
+        )
+        _atomic_write(LTS_CONF, retrack_lts_in_text(conf_text), 0o644)
     else:
-        print(f"{LTS_CONF} already pinned to a release tag")
+        print(f"{LTS_CONF} already tracks the stable lts tag")
     pacman = shutil.which("pacman") or "/usr/bin/pacman"
     print("refreshing sync databases (pacman -Sy)")
     rc = _stream([pacman, "-Sy", "--noconfirm"])

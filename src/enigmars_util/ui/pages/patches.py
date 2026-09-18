@@ -52,7 +52,7 @@ class PatchesPage(QWidget):
             "Kernel repository repair (Sept 2026)",
             "Repairs the EnigmarsOS kernel repos: migrates pacman Server URLs "
             "from RishiSpace to enigmars-project, removes the frozen ISO snapshot "
-            "shadow and pins the LTS download URL to a real release.",
+            "shadow and tracks the LTS download via the stable lts tag.",
         )
         patch_row = QHBoxLayout()
         patch_row.setContentsMargins(0, 4, 0, 4)
@@ -61,7 +61,7 @@ class PatchesPage(QWidget):
         self.patch_status.setWordWrap(True)
         patch_row.addWidget(self.patch_status, 1)
         self.patch_btn = button("Apply kernel repo fixes", self._apply_kernel_patch)
-        self.patch_btn.setToolTip("Remove the offline shadow, pin the LTS URL, and refresh databases in one step")
+        self.patch_btn.setToolTip("Remove the offline shadow, track the lts tag, and refresh databases in one step")
         patch_row.addWidget(self.patch_btn)
         self._patch1_card.body.addLayout(patch_row)
         root.addWidget(self._patch1_card)
@@ -127,9 +127,7 @@ class PatchesPage(QWidget):
                 )
                 self.patch_btn.setEnabled(False)
             elif not status.needs_patch and not pending:
-                tag = lts_pinned_tag(_read_lts_conf())
-                text = "Repositories healthy — rolling tracks Latest"
-                text += f", LTS tracks {tag}." if tag else "."
+                text = "Repositories healthy — rolling tracks Latest, LTS tracks lts."
                 if self._show_update_hint:
                     text += " Tip: Packages → Update system for a full refresh (pacman -Syyu)."
                 self.patch_status.setText(text)
@@ -143,8 +141,14 @@ class PatchesPage(QWidget):
                     )
                 if status.offline_shadows:
                     issues.append("frozen offline snapshot shadows the rolling kernel (pins kernel forever)")
-                if status.lts_unpinned:
-                    issues.append("LTS Server is an unpinned placeholder URL (does not resolve)")
+                if status.lts_not_tracking:
+                    pinned = lts_pinned_tag(_read_lts_conf())
+                    if pinned:
+                        issues.append(
+                            f"LTS Server is pinned to {pinned} instead of tracking lts (freezes updates)"
+                        )
+                    else:
+                        issues.append("LTS Server does not track the stable lts tag")
                 self.patch_status.setText("Issues found:\n• " + "\n• ".join(issues))
                 self.patch_btn.setText("Apply kernel repo fixes")
                 self.patch_btn.setEnabled(mutate)
@@ -166,8 +170,8 @@ class PatchesPage(QWidget):
             "pre-move installs keep tracking releases after the org transfer.\n"
             "2. Remove the enigmarsos-offline shadow — the frozen ISO snapshot "
             "pins your kernel forever instead of tracking rolling releases.\n"
-            "3. Pin the LTS Server URL to a real release tag — the "
-            "releases/download/lts placeholder does not resolve.\n\n"
+            "3. Point the LTS Server URL at the stable lts tag — a pinned "
+            "release URL freezes your LTS kernel at that release.\n\n"
             "Then refresh databases (pacman -Sy) and print which repo each "
             "kernel resolves from. No reboot needed — repo changes need none."
         )

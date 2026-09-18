@@ -6,10 +6,11 @@ Three failure modes, one logical patch:
   Included on installed systems, so ``pacman`` resolves
   ``linux-enigmarsos`` from the offline snapshot instead of the rolling
   repo — pinning the kernel forever. Legitimate on the live ISO itself.
-- Unpinned LTS URL: ``/etc/pacman.d/linux-enigmarsos-lts.conf`` still
-  points at the literal ``releases/download/lts`` placeholder, which does
-  not resolve. The fix pins it to a real release tag (same selection as
-  EnigmarsOS ``scripts/build/fetch-lts-repo.sh``).
+- LTS not tracking ``lts``: ``/etc/pacman.d/linux-enigmarsos-lts.conf``
+  points at a pinned release tag (or anything other than the stable
+  ``releases/download/lts`` URL), so LTS updates stop flowing. The fix
+  rewrites the Server URL to the stable ``lts`` tag, which the release
+  workflow retargets on every LTS release.
 - Org move: pacman drop-ins still point at ``github.com/RishiSpace/*``
   (or ``api.github.com/repos/RishiSpace/*``). The fix rewrites them to
   ``github.com/enigmars-project/*`` so pre-move installs keep tracking
@@ -43,10 +44,12 @@ ORG_MIGRATION_CONFS = (
 
 LIVE_ISO_MARKERS = (Path("/run/archiso"), Path("/etc/enigmarsos/iso-build"))
 
-# Placeholder is `releases/download/lts` with nothing after `lts`. The
-# negative lookahead keeps pinned tags such as
-# `.../download/linux-enigmarsos-lts-6.18.51` from matching.
-_LTS_PLACEHOLDER_RE = re.compile(r"releases/download/lts(?![-\w])")
+# Stable tag is `releases/download/lts` with nothing after `lts`. The
+# negative lookahead keeps versioned tags such as
+# `.../download/linux-enigmarsos-lts-6.18.51` from matching as stable.
+_LTS_STABLE_RE = re.compile(r"releases/download/lts(?![-\w])")
+# Any other `releases/download/<tag>` is a pinned (frozen) tag.
+_LTS_PINNED_RE = re.compile(r"releases/download/(?!lts(?![-\w]))([^\s\"']+)")
 _DOWNLOAD_TAG_RE = re.compile(r"releases/download/([^\s\"']+)")
 
 _TIMEOUT = 20
@@ -55,18 +58,18 @@ _TIMEOUT = 20
 @dataclass(frozen=True)
 class KernelRepoPatchStatus:
     offline_shadows: bool  # pacman resolves linux-enigmarsos from enigmarsos-offline
-    lts_unpinned: bool  # lts conf Server still contains releases/download/lts
+    lts_not_tracking: bool  # lts conf Server does not use the stable releases/download/lts URL
     on_live_iso: bool  # /run/archiso exists or /etc/enigmarsos/iso-build present
 
     @property
     def needs_patch(self) -> bool:
         if self.on_live_iso:
             return False
-        return self.offline_shadows or self.lts_unpinned
+        return self.offline_shadows or self.lts_not_tracking
 
 
-def lts_unpinned_in(text: str) -> bool:
-    """True when a Server line uses the literal `releases/download/lts` URL."""
+def lts_tracks_in(text: str) -> bool:
+    """True when a Server line uses the stable `releases/download/lts` URL."""
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -74,13 +77,30 @@ def lts_unpinned_in(text: str) -> bool:
         key, _, rest = line.partition("=")
         if key.strip().lower() != "server":
             continue
-        if _LTS_PLACEHOLDER_RE.search(rest):
+        if _LTS_STABLE_RE.search(rest):
             return True
     return False
 
 
+def retrack_lts_in_text(text: str) -> str:
+    """Rewrite pinned `releases/download/<tag>` URLs to the stable `lts` tag.
+
+    Idempotent: URLs already on the stable tag are left untouched, as is
+    every non-Server line (formatting preserved).
+    """
+    out: list[str] = []
+    for raw in text.splitlines(keepends=True):
+        stripped = raw.strip()
+        if stripped and not stripped.startswith("#"):
+            key, eq, _ = stripped.partition("=")
+            if eq and key.strip().lower() == "server":
+                raw = _LTS_PINNED_RE.sub("releases/download/lts", raw)
+        out.append(raw)
+    return "".join(out)
+
+
 def lts_pinned_tag(text: str) -> str | None:
-    """Release tag pinned in the LTS conf Server URL, or None if unpinned/missing."""
+    """Versioned tag pinned in the LTS conf Server URL, or None if tracking/stable/missing."""
     for raw in text.splitlines():
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -201,8 +221,16 @@ def _offline_shadows() -> bool:
     return offline_include_present(_read_text(PACMAN_CONF))
 
 
-def _lts_unpinned() -> bool:
-    return lts_unpinned_in(_read_text(LTS_CONF))
+def _lts_not_tracking() -> bool:
+    # A missing conf means the repos were never enabled — the Kernel tab owns
+    # that flow, not this patch.
+    try:
+        present = LTS_CONF.is_file()
+    except OSError:
+        return False
+    if not present:
+        return False
+    return not lts_tracks_in(_read_text(LTS_CONF))
 
 
 def probe_kernel_repo_patch() -> KernelRepoPatchStatus:
@@ -216,7 +244,7 @@ def probe_kernel_repo_patch() -> KernelRepoPatchStatus:
     except Exception:  # noqa: BLE001
         shadows = False
     try:
-        unpinned = _lts_unpinned()
+        off_track = _lts_not_tracking()
     except Exception:  # noqa: BLE001
-        unpinned = False
-    return KernelRepoPatchStatus(shadows, unpinned, iso)
+        off_track = False
+    return KernelRepoPatchStatus(shadows, off_track, iso)
