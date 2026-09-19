@@ -7,6 +7,7 @@
 - Self-update: check origin/main, then recompile and reinstall via pkexec when HEAD has moved
 - Enigmars Packages: if the enigmars-extras pacman repo is configured, list packages that are not installed and install selected or all; if missing, add the repo and `pacman -Sy`
 - Patches page: one-click fixes, starting with kernel repository repair (migrate Server URLs to enigmars-project, remove enigmarsos-offline shadow, track the stable lts tag) via a single `repo-repair-kernel` privileged call
+- Fun page: Cat Mode meows on in-app tab switches, on login (`--meow-login` autostart fallback), and natively on Plasma via KDE Login/Logout event sounds (`data/sounds/meow-login.oga`, `meow-logout.oga`); no listeners or overlays — Start Menu clicks and window switches are deliberately out of scope on Wayland
 
 ## 1.0.0
 

@@ -6,7 +6,8 @@ Architecture: all
 Maintainer: RishiSpace <rishikesh.giridhar@outlook.com>
 Homepage: https://github.com/enigmars-project/enigmars-utils
 Depends: python3 (>= 3.12), python3-pyside6 | python3-pyside6.qtwidgets, policykit-1 | polkitd
-Recommends: sbctl, ufw
+Recommends: sbctl, ufw, mpv | ffmpeg
+Suggests: python3-pyside6.qtmultimedia
 Description: Qt landing hub for Linux (tweaks, packages, kernels, Secure Boot)
  Enigmars Utils detects the distro, desktop, and package manager, then offers
  Windows-convert tweaks, package actions, kernel management, and sbctl-based

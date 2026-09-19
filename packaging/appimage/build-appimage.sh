@@ -50,7 +50,7 @@ find "$APPDIR/usr/lib/enigmars-utils" -type d -name '__pycache__' -prune -exec r
 share="$APPDIR/usr/share/enigmars-util"
 install -d "$share"
 cp -a "$ROOT/data/tweaks" "$ROOT/data/catalog" "$ROOT/data/kernels" \
-  "$ROOT/data/branding" "$ROOT/data/icons" "$share/"
+  "$ROOT/data/branding" "$ROOT/data/icons" "$ROOT/data/sounds" "$share/"
 
 install -Dm755 "$ROOT/packaging/appimage/enigmars-util.wrapper" "$APPDIR/AppRun"
 install -Dm755 "$ROOT/packaging/appimage/enigmars-util.wrapper" \

@@ -13,21 +13,34 @@ from enigmars_util.ui.main_window import MainWindow
 from enigmars_util.ui.theme import apply_theme
 
 
-def _parse(argv: list[str]) -> tuple[str | None, list[str]]:
+def _parse(argv: list[str]) -> tuple[str | None, bool, list[str]]:
     parser = argparse.ArgumentParser(prog="enigmars-util", add_help=True)
     parser.add_argument(
         "--page",
         default="",
-        help="Open a tab (home, tweaks, packages, enigmars-packages, kernel, patches, drivers, secure-boot, about)",
+        help="Open a tab (home, tweaks, packages, enigmars-packages, kernel, patches, drivers, secure-boot, fun, about)",
+    )
+    parser.add_argument(
+        "--meow-login",
+        action="store_true",
+        help="Play the Cat Mode login meow and exit (used by autostart).",
     )
     args, rest = parser.parse_known_args(argv[1:])
     page = args.page.strip() or None
-    return page, [argv[0], *rest]
+    return page, args.meow_login, [argv[0], *rest]
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
-    page, qt_argv = _parse(argv)
+    page, meow_login, qt_argv = _parse(argv)
+    if meow_login:
+        from enigmars_util.fun import load_settings, should_meow_on_login
+        from enigmars_util.sound import play_meow_blocking
+
+        settings = load_settings()
+        if not should_meow_on_login(settings):
+            return 0
+        return 0 if play_meow_blocking(volume=settings.volume) else 0
     if os.geteuid() == 0:
         app = QApplication(qt_argv)
         QMessageBox.critical(

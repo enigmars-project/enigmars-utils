@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Enigmars Fun Meow
+Comment=Cat Mode login sound
+Exec=enigmars-util --meow-login
+Icon=enigmarsos
+Terminal=false
+NoDisplay=true
+X-KDE-autostart-phase=1
+X-GNOME-Autostart-enabled=true

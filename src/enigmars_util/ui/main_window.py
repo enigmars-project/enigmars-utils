@@ -22,6 +22,7 @@ from enigmars_util.ui.jobs import Work
 from enigmars_util.ui.pages.about import AboutPage
 from enigmars_util.ui.pages.drivers import DriversPage
 from enigmars_util.ui.pages.extras import ExtrasPage
+from enigmars_util.ui.pages.fun import FunPage
 from enigmars_util.ui.pages.home import HomePage
 from enigmars_util.ui.pages.kernel import KernelPage
 from enigmars_util.ui.pages.packages import PackagesPage
@@ -66,6 +67,7 @@ class MainWindow(QMainWindow):
         self.patches = PatchesPage()
         self.drivers = DriversPage()
         self.secureboot = SecureBootPage()
+        self.fun = FunPage()
         self.about = AboutPage()
         pages = (
             ("home", "Home", self.home),
@@ -76,6 +78,7 @@ class MainWindow(QMainWindow):
             ("patches", "Patches", self.patches),
             ("drivers", "Drivers", self.drivers),
             ("secure-boot", "Secure Boot", self.secureboot),
+            ("fun", "Fun", self.fun),
             ("about", "About", self.about),
         )
         for key, label, widget in pages:
@@ -152,6 +155,16 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(self._order.index(key))
         for name, btn in self._nav_btns.items():
             btn.setChecked(name == key)
+        if key != "fun":
+            try:
+                from enigmars_util import fun as fun_settings
+                from enigmars_util.sound import play_meow
+
+                settings = self.fun.refresh()
+                if fun_settings.should_meow_on_nav(settings):
+                    play_meow(volume=settings.volume)
+            except Exception:  # noqa: BLE001
+                pass
 
     def _on_profile(self, profile: object) -> None:
         if not isinstance(profile, HostProfile):
@@ -167,6 +180,7 @@ class MainWindow(QMainWindow):
             self.patches,
             self.drivers,
             self.secureboot,
+            self.fun,
             self.about,
         ):
             page.set_profile(profile)

@@ -37,10 +37,12 @@ install -Dm755 "$ROOT/packaging/libexec/enigmars-util-helper" \
 
 share="${DESTDIR}${PREFIX}/share/enigmars-util"
 install -d "$share"
-cp -a "$ROOT/data/tweaks" "$ROOT/data/catalog" "$ROOT/data/kernels" "$ROOT/data/branding" "$ROOT/data/icons" "$share/"
+cp -a "$ROOT/data/tweaks" "$ROOT/data/catalog" "$ROOT/data/kernels" "$ROOT/data/branding" "$ROOT/data/icons" "$ROOT/data/sounds" "$share/"
 
 install -Dm644 "$ROOT/data/desktop/org.enigmars.Util.desktop" \
   "${DESTDIR}${PREFIX}/share/applications/org.enigmars.Util.desktop"
+install -Dm644 "$ROOT/data/desktop/org.enigmars.Fun-Meow.desktop" \
+  "${DESTDIR}${PREFIX}/share/applications/org.enigmars.Fun-Meow.desktop"
 install -Dm644 "$ROOT/data/icons/EnigmarsOS.svg" \
   "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/enigmarsos.svg"
 install -Dm644 "$ROOT/data/icons/EnigmarsOS.svg" \

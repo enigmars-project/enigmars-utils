@@ -13,6 +13,8 @@ optdepends=(
   'sbctl: Secure Boot key enrollment'
   'ufw: firewall toggle'
   'plasma-discover: software center shortcut'
+  'mpv: Cat Mode meow playback'
+  'qt6-multimedia: in-app Cat Mode sound'
 )
 provides=('enigmars-util')
 conflicts=('enigmars-util')

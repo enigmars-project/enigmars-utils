@@ -70,3 +70,19 @@ def data_root() -> Path:
     if SHARE_PATH.is_dir():
         return SHARE_PATH
     return Path(__file__).resolve().parents[2] / "data"
+
+
+def sound_path(name: str = "meow.mp3") -> Path:
+    """Resolve a bundled sound file (allow-listed base dirs only)."""
+    safe = Path(name).name
+    if not safe or safe not in ("meow.mp3",):
+        return data_root() / "sounds" / "meow.mp3"
+    candidates = (
+        data_root() / "sounds" / safe,
+        SHARE_PATH / "sounds" / safe,
+        Path(__file__).resolve().parents[2] / "media" / safe,
+    )
+    for path in candidates:
+        if path.is_file():
+            return path
+    return candidates[0]

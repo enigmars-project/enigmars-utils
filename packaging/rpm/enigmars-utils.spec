@@ -33,6 +33,7 @@ find %{buildroot} -type f -name '*.pyc' -delete
 /usr/lib/enigmars-utils
 /usr/share/enigmars-util
 /usr/share/applications/org.enigmars.Util.desktop
+/usr/share/applications/org.enigmars.Fun-Meow.desktop
 /usr/share/icons/hicolor/scalable/apps/enigmarsos.svg
 /usr/share/icons/hicolor/scalable/apps/org.enigmars.Util.svg
 /usr/share/icons/hicolor/256x256/apps/enigmarsos.png
