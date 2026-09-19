@@ -1,3 +1,9 @@
+enigmars-utils (1.2.0) unstable; urgency=medium
+
+  * Fun page: Cat Mode with KDE login/logout event sounds, CI-hermetic tests.
+
+ -- RishiSpace <rishikesh.giridhar@outlook.com>  Sat, 19 Sep 2026 18:52:41 +0530
+
 enigmars-utils (1.1.2) unstable; urgency=medium
 
   * Initial Debian package.

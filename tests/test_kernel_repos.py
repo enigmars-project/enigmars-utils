@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import shutil
 import unittest
+from unittest import mock
 
 from enigmars_util.kernel_repos import (
     KERNEL_DROPINS,
@@ -43,9 +45,6 @@ class KernelReposConfTest(unittest.TestCase):
         self.assertEqual(with_kernel_include(inline, "linux-enigmarsos"), inline)
 
     def test_probe_without_pacman_is_safe(self) -> None:
-        import shutil
-        from unittest import mock
-
         with mock.patch.object(shutil, "which", return_value=None):
             status = probe_kernel_repos()
         self.assertEqual(status.configured, ())
@@ -53,14 +52,17 @@ class KernelReposConfTest(unittest.TestCase):
         self.assertIn("pacman", status.detail.lower())
 
     def test_probe_repo_lists(self) -> None:
-        full = probe_kernel_repos(["core", *KERNEL_REPOS])
-        self.assertEqual(full.configured, KERNEL_REPOS)
-        self.assertEqual(full.missing, ())
-        partial = probe_kernel_repos(["core", "linux-enigmarsos"])
-        self.assertEqual(partial.configured, ("linux-enigmarsos",))
-        self.assertEqual(partial.missing, ("linux-enigmarsos-lts",))
-        empty = probe_kernel_repos(["core", "extra"])
-        self.assertEqual(empty.configured, ())
+        # Hermetic: CI runners (ubuntu) have no pacman; the explicit repo
+        # list must be evaluated regardless of host tooling.
+        with mock.patch.object(shutil, "which", return_value="/usr/bin/pacman"):
+            full = probe_kernel_repos(["core", *KERNEL_REPOS])
+            self.assertEqual(full.configured, KERNEL_REPOS)
+            self.assertEqual(full.missing, ())
+            partial = probe_kernel_repos(["core", "linux-enigmarsos"])
+            self.assertEqual(partial.configured, ("linux-enigmarsos",))
+            self.assertEqual(partial.missing, ("linux-enigmarsos-lts",))
+            empty = probe_kernel_repos(["core", "extra"])
+            self.assertEqual(empty.configured, ())
 
 
 if __name__ == "__main__":

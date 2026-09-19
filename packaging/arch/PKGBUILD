@@ -1,11 +1,11 @@
 # Maintainer: RishiSpace <rishikesh.giridhar@outlook.com>
 # AUR release package. Requires a public GitHub tag: v$pkgver
 #
-#   git tag v1.1.2 && git push origin v1.1.2
+#   git tag v1.2.0 && git push origin v1.2.0
 #   makepkg -g >> PKGBUILD   # refresh sha256sums
 #   makepkg --printsrcinfo > .SRCINFO
 pkgname=enigmars-utils
-pkgver=1.1.2
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="Qt landing hub: tweaks, packages, kernels, and Secure Boot for Linux"
 arch=('any')

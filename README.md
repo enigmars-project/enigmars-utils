@@ -3,7 +3,7 @@
 Qt landing hub for Linux. Detects the distro, desktop, and package manager, then
 offers Windows-convert tweaks, package actions, and kernel management.
 
-Version **1.1.2**. EnigmarsOS is first-class (Plasma 6, pacman, Limine, ESP
+Version **1.2.0**. EnigmarsOS is first-class (Plasma 6, pacman, Limine, ESP
 kernel staging). The same binary works on other families by probing the host.
 
 The GUI never runs as root. Package, kernel, and firewall changes go through

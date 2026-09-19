@@ -22,8 +22,15 @@ class SoundTest(unittest.TestCase):
         self.assertIsNone(external_command(Path("/nonexistent/meow.mp3")))
 
     def test_play_meow_uses_external_fallback_without_qt_app(self) -> None:
-        # No QApplication in unit tests: _play_qt bails, Popen is mocked (no noise).
-        with mock.patch("subprocess.Popen") as popen:
+        # No QApplication in unit tests: _play_qt bails. Fake a player so the
+        # test is deterministic even on runners with no audio tools installed.
+        with (
+            mock.patch("enigmars_util.sound._play_qt", return_value=False),
+            mock.patch(
+                "enigmars_util.sound.external_command", return_value=["mpv", "x"]
+            ),
+            mock.patch("subprocess.Popen") as popen,
+        ):
             self.assertTrue(play_meow(volume=0))
             popen.assert_called_once()
 

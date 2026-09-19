@@ -2,7 +2,7 @@
 # Build from the parent git checkout (no network):
 #   cd packaging/arch && makepkg -f -p PKGBUILD.local
 pkgname=enigmars-utils
-pkgver=1.1.2
+pkgver=1.2.0
 pkgrel=1
 pkgdesc="Qt landing hub: tweaks, packages, kernels, and Secure Boot for Linux"
 arch=('any')

@@ -41,5 +41,7 @@ find %{buildroot} -type f -name '*.pyc' -delete
 /usr/share/polkit-1/actions/org.enigmars.util.policy
 
 %changelog
+* Sat Sep 19 2026 RishiSpace <rishikesh.giridhar@outlook.com> - 1.2.0-1
+- Fun page: Cat Mode with KDE login/logout event sounds, CI-hermetic tests.
 * Mon Aug 31 2026 RishiSpace <rishikesh.giridhar@outlook.com> - 1.1.2-1
 - Initial RPM package.
