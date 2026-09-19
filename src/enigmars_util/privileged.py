@@ -8,6 +8,7 @@ from pathlib import Path
 
 from enigmars_util.names import (
     validate_aur_helper,
+    validate_device,
     validate_package_list,
     validate_service,
     validate_verb,
@@ -117,3 +118,11 @@ def kernel_repo_setup_cmd() -> list[str]:
 
 def kernel_repo_repair_cmd() -> list[str]:
     return pkexec_cmd("repo-repair-kernel")
+
+
+def esp_repair_cmd(esp: str, root: str) -> list[str]:
+    esp = validate_device(esp)
+    root = validate_device(root)
+    if esp == root:
+        raise ValueError("ESP and root must be different partitions")
+    return pkexec_cmd("esp-repair", [esp, root])

@@ -4,6 +4,7 @@ import unittest
 
 from enigmars_util.names import (
     validate_aur_helper,
+    validate_device,
     validate_package_list,
     validate_package_name,
     validate_search_query,
@@ -54,6 +55,32 @@ class NamesTest(unittest.TestCase):
         self.assertEqual(validate_search_query(" firefox "), "firefox")
         self.assertEqual(validate_search_query("foo;bar"), "")
         self.assertEqual(validate_search_query(""), "")
+
+    def test_good_device(self) -> None:
+        for good in ("/dev/nvme0n1p1", "/dev/sda2", "/dev/mmcblk0p1", "/dev/mapper/vg-root", "/dev/dm-0"):
+            with self.subTest(dev=good):
+                self.assertEqual(validate_device(good), good)
+
+    def test_bad_device(self) -> None:
+        for bad in (
+            "",
+            "/dev/",
+            "sda1",
+            "/etc/passwd",
+            "/dev/../etc/passwd",
+            "/dev/sda1;reboot",
+            "/dev/sda1|id",
+            "/dev/sda 1",
+            "/dev/$(id)",
+            "/dev/sda1\nreboot",
+            "/dev/" + "a" * 70,
+        ):
+            with self.subTest(dev=bad):
+                with self.assertRaises(ValueError):
+                    validate_device(bad)
+
+    def test_esp_repair_verb_known(self) -> None:
+        self.assertEqual(validate_verb("esp-repair"), "esp-repair")
 
 
 if __name__ == "__main__":

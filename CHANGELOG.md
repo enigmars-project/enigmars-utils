@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0
+
+- Patches: separate ESP kernel staging repair card (ISOs before 07-09-2026) with interactive ESP/root partition pickers; new `esp-repair` helper verb mounts the target, reinstalls the kernel, installs the ESP sync hook, and stages to the ESP
+
 ## 1.2.0
 
 - Secure Boot page: sbctl install/enrollment/enabled/Setup Mode status, firmware reboot with instructions, resume into the Secure Boot tab after login, enroll keys including Microsoft (`sbctl enroll-keys -m`)

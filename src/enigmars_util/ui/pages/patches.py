@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (
+    QComboBox,
     QHBoxLayout,
     QLabel,
     QVBoxLayout,
     QWidget,
 )
 
+from enigmars_util.esp_repair import (
+    describe,
+    esp_candidates,
+    list_partitions,
+    root_candidates,
+)
 from enigmars_util.patches import (
     LTS_CONF,
     KernelRepoPatchStatus,
@@ -14,7 +21,7 @@ from enigmars_util.patches import (
     probe_kernel_repo_patch,
     probe_org_migration,
 )
-from enigmars_util.privileged import kernel_repo_repair_cmd
+from enigmars_util.privileged import esp_repair_cmd, kernel_repo_repair_cmd
 from enigmars_util.profile import HostProfile
 from enigmars_util.ui.jobs import Work
 from enigmars_util.ui.widgets import Card, JobPane, button, confirm, warn
@@ -65,6 +72,42 @@ class PatchesPage(QWidget):
         patch_row.addWidget(self.patch_btn)
         self._patch1_card.body.addLayout(patch_row)
         root.addWidget(self._patch1_card)
+
+        self._esp_card = Card(
+            "ESP kernel staging repair (ISOs before 07-09-2026)",
+            "Only for systems installed from an ISO older than 07-09-2026: "
+            "those lack the ESP sync hook, so kernel updates never reach the "
+            "ESP. Pick the installed system's ESP and root partitions below "
+            "(usually from a live USB), then apply. Newer installs do not "
+            "need this.",
+        )
+        pick_row = QHBoxLayout()
+        pick_row.setContentsMargins(0, 4, 0, 4)
+        self.esp_combo = QComboBox()
+        self.esp_combo.setToolTip("vfat partition holding EFI/")
+        self.esp_combo.currentIndexChanged.connect(self._esp_selection_changed)
+        self.root_combo = QComboBox()
+        self.root_combo.setToolTip("btrfs / ext4 / xfs partition holding the system root")
+        self.root_combo.currentIndexChanged.connect(self._esp_selection_changed)
+        pick_row.addWidget(QLabel("ESP:"))
+        pick_row.addWidget(self.esp_combo, 1)
+        pick_row.addWidget(QLabel("Root:"))
+        pick_row.addWidget(self.root_combo, 1)
+        pick_row.addWidget(button("Rescan", self._esp_rescan))
+        self._esp_card.body.addLayout(pick_row)
+        self.esp_status = QLabel("Select the ESP and root partitions of the system to repair.")
+        self.esp_status.setObjectName("muted")
+        self.esp_status.setWordWrap(True)
+        self._esp_card.body.addWidget(self.esp_status)
+        apply_row = QHBoxLayout()
+        apply_row.setContentsMargins(0, 4, 0, 4)
+        apply_row.addStretch()
+        self.esp_btn = button("Repair ESP staging", self._apply_esp_patch)
+        self.esp_btn.setToolTip("Mount, reinstall kernel, install ESP hook, stage to ESP")
+        self.esp_btn.setEnabled(False)
+        apply_row.addWidget(self.esp_btn)
+        self._esp_card.body.addLayout(apply_row)
+        root.addWidget(self._esp_card)
         root.addStretch(1)
 
         self.job = JobPane()
@@ -74,7 +117,9 @@ class PatchesPage(QWidget):
     def set_profile(self, profile: HostProfile) -> None:
         self._profile = profile
         self._patch1_card.setVisible(profile.native_pm == "pacman")
+        self._esp_card.setVisible(profile.native_pm == "pacman")
         self._refresh_patch()
+        self._esp_rescan()
 
     def _refresh_patch(self) -> None:
         self._patch_gen += 1
@@ -185,3 +230,66 @@ class PatchesPage(QWidget):
     def _job_done(self, ok: bool) -> None:
         self._show_update_hint = ok
         self._refresh_patch()
+
+    def _esp_rescan(self) -> None:
+        parts = list_partitions()
+        esps = esp_candidates(parts)
+        roots = root_candidates(parts)
+        self.esp_combo.blockSignals(True)
+        self.root_combo.blockSignals(True)
+        self.esp_combo.clear()
+        for part in esps:
+            self.esp_combo.addItem(describe(part), part.path)
+        self.root_combo.clear()
+        for part in roots:
+            self.root_combo.addItem(describe(part), part.path)
+        self.esp_combo.blockSignals(False)
+        self.root_combo.blockSignals(False)
+        if not esps or not roots:
+            self.esp_status.setText(
+                "No candidate partitions found (need a vfat ESP and a "
+                "btrfs/ext4/xfs root). Run from a live USB with the target "
+                "disk attached."
+            )
+        self._esp_selection_changed()
+
+    def _esp_selected(self) -> tuple[str, str]:
+        esp = self.esp_combo.currentData() or ""
+        root = self.root_combo.currentData() or ""
+        return str(esp), str(root)
+
+    def _esp_selection_changed(self) -> None:
+        esp, root = self._esp_selected()
+        mutate = bool(self._profile and self._profile.can_mutate_native)
+        ok = bool(esp and root and esp != root)
+        self.esp_btn.setEnabled(ok and mutate)
+        if esp and root and esp == root:
+            self.esp_status.setText("ESP and root must be different partitions.")
+        elif ok:
+            self.esp_status.setText(f"Will repair:\n• ESP: {esp}\n• Root: {root}")
+        elif not mutate and self._profile is not None:
+            self.esp_status.setText("Package changes are not available on this system.")
+
+    def _apply_esp_patch(self) -> None:
+        esp, root = self._esp_selected()
+        if not esp or not root or esp == root:
+            warn(self, "ESP repair", "Pick distinct ESP and root partitions first.")
+            return
+        if not self._profile or self._profile.native_pm != "pacman":
+            warn(self, "ESP repair", "ESP repair needs pacman (Arch live USB).")
+            return
+        body = (
+            f"Repair kernel staging on another install?\n\n"
+            f"• ESP: {esp}\n"
+            f"• Root: {root}\n\n"
+            "This mounts both partitions, reinstalls the kernel inside the "
+            "target system, installs the ESP sync hook, and stages the "
+            "kernel onto the ESP. Double-check the partitions — the wrong "
+            "disk means the wrong system gets modified."
+        )
+        if not confirm(self, "Repair ESP staging", body):
+            return
+        try:
+            self.job.run(esp_repair_cmd(esp, root), "esp-repair")
+        except (FileNotFoundError, ValueError) as exc:
+            warn(self, "Helper", str(exc))

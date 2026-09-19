@@ -39,6 +39,7 @@ from enigmars_util.patches import (
 )
 from enigmars_util.names import (
     validate_aur_helper,
+    validate_device,
     validate_package_list,
     validate_service,
     validate_verb,
@@ -59,6 +60,7 @@ from enigmars_util.self_update import (
     parse_ls_remote,
 )
 from enigmars_util.paths import ESP_SYNC
+from enigmars_util.esp_repair import ROOT_FSTYPES, parse_subvolumes
 from enigmars_util.probe import probe_host
 from enigmars_util.protocol import RESULT_PREFIX
 
@@ -729,6 +731,228 @@ def _repo_repair_kernel() -> int:
     return 0
 
 
+# Fixed upstream sources for the ESP-sync hook (pre-2026-07-09 ISOs lack them).
+ESP_SYNC_SCRIPT_URL = (
+    "https://raw.githubusercontent.com/RishiSpace/EnigmarsOS/main"
+    "/scripts/install/sync-esp-boot.sh"
+)
+ESP_HOOK_URL = (
+    "https://raw.githubusercontent.com/RishiSpace/EnigmarsOS/main"
+    "/archiso/airootfs/usr/share/libalpm/hooks/90-enigmarsos-sync-esp.hook"
+)
+ESP_HOOK_SCRIPT_URL = (
+    "https://raw.githubusercontent.com/RishiSpace/EnigmarsOS/main"
+    "/archiso/airootfs/usr/share/libalpm/scripts/enigmarsos-sync-esp"
+)
+
+_ESP_REPAIR_BASE = Path("/run/enigmars-esp-repair")
+
+
+def _blkid_fstype(dev: str) -> str | None:
+    blkid = shutil.which("blkid") or "/usr/sbin/blkid"
+    try:
+        proc = subprocess.run(
+            [blkid, "-s", "TYPE", "-o", "value", "--", dev],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            env={**os.environ, "PATH": SAFE_PATH},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if proc.returncode != 0:
+        return None
+    return (proc.stdout or "").strip().lower() or None
+
+
+def _mounted_devices() -> set[str]:
+    mounted: set[str] = set()
+    try:
+        text = Path("/proc/mounts").read_text(encoding="utf-8")
+    except OSError:
+        return mounted
+    for line in text.splitlines():
+        fields = line.split()
+        if not fields:
+            continue
+        try:
+            mounted.add(os.path.realpath(fields[0]))
+        except OSError:
+            continue
+    return mounted
+
+
+def _check_repair_device(dev: str, *, want: tuple[str, ...], role: str) -> str:
+    """Validate a repair target device; return its real path or raise."""
+    validate_device(dev)
+    real = os.path.realpath(dev)
+    try:
+        st = os.stat(real)
+    except OSError as exc:
+        raise ValueError(f"{role} device not found: {dev}") from exc
+    import stat as statmod
+
+    if not statmod.S_ISBLK(st.st_mode):
+        raise ValueError(f"{role} is not a block device: {dev}")
+    if real in _mounted_devices():
+        raise ValueError(f"{role} {dev} is already mounted; unmount it first")
+    fstype = _blkid_fstype(real)
+    if fstype not in want:
+        raise ValueError(f"{role} {dev} has fstype {fstype or 'unknown'}, want {want}")
+    return real
+
+
+def _mount(args: list[str], target: Path) -> None:
+    target.mkdir(parents=True, exist_ok=True)
+    mount = shutil.which("mount") or "/usr/bin/mount"
+    proc = subprocess.run(
+        [mount, *args],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        env={**os.environ, "PATH": SAFE_PATH},
+    )
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "mount failed").strip().splitlines()
+        raise ValueError(f"mount failed: {err[-1] if err else 'mount failed'}")
+
+
+def _umount_all(base: Path) -> None:
+    umount = shutil.which("umount") or "/usr/bin/umount"
+    try:
+        subprocess.run(
+            [umount, "-R", str(base)],
+            check=False,
+            capture_output=True,
+            timeout=60,
+            env={**os.environ, "PATH": SAFE_PATH},
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def _curl_to(url: str, dest: Path, *, marker: str) -> None:
+    curl = shutil.which("curl") or "/usr/bin/curl"
+    if not Path(curl).is_file():
+        raise ValueError("curl is not installed (needed to fetch the ESP hook)")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    proc = subprocess.run(
+        [curl, "-fsSL", "--proto", "=https", "--max-time", "60", "--", url, "-o", str(dest)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=90,
+        env={**os.environ, "PATH": SAFE_PATH},
+    )
+    if proc.returncode != 0:
+        raise ValueError(f"download failed: {url}")
+    try:
+        body = dest.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ValueError(f"cannot read download: {exc}") from exc
+    if marker not in body:
+        raise ValueError(f"downloaded file failed sanity check: {url}")
+    os.chmod(dest, 0o644)
+
+
+def _esp_repair(esp: str, root: str) -> int:
+    if _pm() != "pacman":
+        print("ESP repair requires pacman (run from an Arch live USB).", file=sys.stderr)
+        return 1
+    arch_chroot = shutil.which("arch-chroot") or "/usr/bin/arch-chroot"
+    if not Path(arch_chroot).is_file():
+        print("arch-chroot is not installed (run from an Arch live USB).", file=sys.stderr)
+        return 1
+    try:
+        esp_dev = _check_repair_device(esp, want=("vfat",), role="ESP")
+        root_dev = _check_repair_device(root, want=ROOT_FSTYPES, role="root")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    mnt = _ESP_REPAIR_BASE / "mnt"
+    if mnt.exists():
+        print(f"{mnt} already exists; another repair may be running", file=sys.stderr)
+        return 1
+    try:
+        root_fs = _blkid_fstype(root_dev) or ""
+        print(f"mounting root {root_dev} ({root_fs})")
+        if root_fs == "btrfs":
+            mounted = False
+            for opts in ("subvol=/@", "subvol=@"):
+                try:
+                    _mount(["-o", opts, "--", root_dev, str(mnt)], mnt)
+                    mounted = True
+                    print(f"mounted with {opts}")
+                    break
+                except ValueError:
+                    continue
+            if not mounted:
+                print("probing btrfs subvolumes")
+                _mount(["-o", "subvolid=5", "--", root_dev, str(mnt)], mnt)
+                try:
+                    btrfs = shutil.which("btrfs") or "/usr/bin/btrfs"
+                    proc = subprocess.run(
+                        [btrfs, "subvolume", "list", str(mnt)],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                        env={**os.environ, "PATH": SAFE_PATH},
+                    )
+                    subvols = parse_subvolumes(proc.stdout or "")
+                finally:
+                    _umount_all(mnt)
+                print(f"found subvolumes: {', '.join(subvols) or '(none)'}")
+                if "@" not in subvols:
+                    print("no @ subvolume; mount the system root manually", file=sys.stderr)
+                    return 1
+                _mount(["-o", "subvol=/@", "--", root_dev, str(mnt)], mnt)
+        else:
+            _mount(["--", root_dev, str(mnt)], mnt)
+        if not (mnt / "etc").is_dir() or not (mnt / "usr").is_dir():
+            print("etc/ or usr/ missing: this is not the system root", file=sys.stderr)
+            return 1
+        print("root verified (etc + usr present)")
+        try:
+            print((mnt / "etc" / "os-release").read_text(encoding="utf-8").splitlines()[0])
+        except OSError:
+            pass
+        efi = mnt / "boot" / "efi"
+        print(f"mounting ESP {esp_dev} at /boot/efi")
+        _mount(["--", esp_dev, str(efi)], efi)
+        if not (efi / "EFI").is_dir():
+            print("warning: no EFI/ dir on the ESP; continuing", file=sys.stderr)
+        print("installing ESP sync hook into the target system")
+        _curl_to(ESP_SYNC_SCRIPT_URL, mnt / "usr/share/enigmarsos/scripts/sync-esp-boot.sh",
+                 marker="sync-esp-boot")
+        _curl_to(ESP_HOOK_URL, mnt / "usr/share/libalpm/hooks/90-enigmarsos-sync-esp.hook",
+                 marker="[Trigger]")
+        _curl_to(ESP_HOOK_SCRIPT_URL, mnt / "usr/share/libalpm/scripts/enigmarsos-sync-esp",
+                 marker="#!")
+        os.chmod(mnt / "usr/share/enigmarsos/scripts/sync-esp-boot.sh", 0o755)
+        os.chmod(mnt / "usr/share/libalpm/scripts/enigmarsos-sync-esp", 0o755)
+        pacman = shutil.which("pacman") or "/usr/bin/pacman"
+        print("updating target system kernel (pacman -Syu linux)")
+        rc = _stream([arch_chroot, str(mnt), pacman, "-Syu", "--noconfirm", "--", "linux"])
+        if rc != 0:
+            return rc
+        print("staging current kernel onto the ESP")
+        return _stream([arch_chroot, str(mnt), "/bin/bash",
+                        "/usr/share/enigmarsos/scripts/sync-esp-boot.sh"])
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    finally:
+        _umount_all(mnt)
+        try:
+            shutil.rmtree(_ESP_REPAIR_BASE, ignore_errors=True)
+        except OSError:
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     _harden()
@@ -804,6 +1028,15 @@ def main(argv: list[str] | None = None) -> int:
             rc = _kernel_repo_setup()
         elif verb == "repo-repair-kernel":
             rc = _repo_repair_kernel()
+        elif verb == "esp-repair":
+            if len(extra) != 2:
+                raise ValueError("esp-repair needs ESP and root partitions")
+            esp = validate_device(extra[0])
+            root = validate_device(extra[1])
+            if esp == root:
+                raise ValueError("ESP and root must be different partitions")
+            detail = f"{verb} {esp} {root}"
+            rc = _esp_repair(esp, root)
         else:
             raise ValueError(f"unhandled verb {verb}")
     except ValueError as exc:

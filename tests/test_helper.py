@@ -38,6 +38,14 @@ class HelperTest(unittest.TestCase):
     def test_repo_repair_kernel_rejects_extra_args(self) -> None:
         self.assertEqual(main(["repo-repair-kernel", "extra"]), 2)
 
+    def test_esp_repair_rejects_bad_args(self) -> None:
+        self.assertEqual(main(["esp-repair"]), 2)
+        self.assertEqual(main(["esp-repair", "/dev/sda1"]), 2)
+        self.assertEqual(main(["esp-repair", "/dev/sda1", "/dev/sda2", "x"]), 2)
+        self.assertEqual(main(["esp-repair", "/etc/passwd", "/dev/sda2"]), 2)
+        self.assertEqual(main(["esp-repair", "/dev/sda1", "/dev/sda1"]), 2)
+        self.assertEqual(main(["esp-repair", "/dev/sda1;reboot", "/dev/sda2"]), 2)
+
     def test_self_update_rejects_extra_args(self) -> None:
         self.assertEqual(main(["self-update", "extra"]), 2)
         self.assertEqual(main(["self-update", "yay"]), 2)

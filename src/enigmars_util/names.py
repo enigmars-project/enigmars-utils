@@ -29,6 +29,7 @@ ALLOWED_VERBS = frozenset(
         "chaotic-repo-setup",
         "kernel-repo-setup",
         "repo-repair-kernel",
+        "esp-repair",
     }
 )
 
@@ -64,6 +65,25 @@ def validate_verb(verb: str) -> str:
     if verb not in ALLOWED_VERBS:
         raise ValueError(f"unknown verb: {verb!r}")
     return verb
+
+
+DEVICE_RE = re.compile(r"^/dev/[A-Za-z0-9][A-Za-z0-9_./-]{0,63}$")
+MAX_DEVICE_LEN = 69
+
+
+def validate_device(dev: str) -> str:
+    """Strict allowlist for block-device args (ESP/root pickers).
+
+    Rejects shell metacharacters, traversal, non-/dev paths. The helper
+    additionally stats S_ISBLK and checks fstype before mounting.
+    """
+    if not isinstance(dev, str) or not dev or len(dev) > MAX_DEVICE_LEN:
+        raise ValueError(f"invalid device: {dev!r}")
+    if ".." in dev or any(ch in _SHELL_META for ch in dev) or " " in dev:
+        raise ValueError(f"invalid device: {dev!r}")
+    if not DEVICE_RE.fullmatch(dev):
+        raise ValueError(f"invalid device: {dev!r}")
+    return dev
 
 
 def validate_aur_helper(name: str) -> str:
